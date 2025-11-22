@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "VpnMonitor.WUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "VpnMonitor.WUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

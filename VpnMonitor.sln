@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VpnMonitor.Service", "VpnMonitor.Service\VpnMonitor.Service.csproj", "{D95B121B-A6EC-42A8-AF97-80C88E735335}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VpnMonitor.WUI", "VpnMonitor.WUI\VpnMonitor.WUI.csproj", "{648AF7F0-3F02-420B-8D0D-F1FDBC764711}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VpnMonitor.Data", "VpnMonitor.Data\VpnMonitor.Data.csproj", "{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D95B121B-A6EC-42A8-AF97-80C88E735335}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D95B121B-A6EC-42A8-AF97-80C88E735335}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D95B121B-A6EC-42A8-AF97-80C88E735335}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D95B121B-A6EC-42A8-AF97-80C88E735335}.Release|Any CPU.Build.0 = Release|Any CPU
+		{648AF7F0-3F02-420B-8D0D-F1FDBC764711}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{648AF7F0-3F02-420B-8D0D-F1FDBC764711}.Debug|Any CPU.Build.0 = Debug|x64
+		{648AF7F0-3F02-420B-8D0D-F1FDBC764711}.Debug|Any CPU.Deploy.0 = Debug|x64
+		{648AF7F0-3F02-420B-8D0D-F1FDBC764711}.Release|Any CPU.ActiveCfg = Release|x64
+		{648AF7F0-3F02-420B-8D0D-F1FDBC764711}.Release|Any CPU.Build.0 = Release|x64
+		{648AF7F0-3F02-420B-8D0D-F1FDBC764711}.Release|Any CPU.Deploy.0 = Release|x64
+		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
