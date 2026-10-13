@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -7,14 +7,14 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using VpnMonitor.Data.Context;
+using VpnMonitor.Data.Statistics;
 using VpnMonitor.WUI.MVVM.Model;
+using VpnMonitor.WUI.Services;
 
 namespace VpnMonitor.WUI.MVVM.ViewModel
 {
     public class ActualClientsViewModel : ObservableRecipient
     {
-        private readonly Microsoft.UI.Dispatching.DispatcherQueue _dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
-
         private DateTime _lastInserted;
         public DateTime LastInserted { get => _lastInserted; set => SetProperty(ref _lastInserted, value); }
 
@@ -23,148 +23,93 @@ namespace VpnMonitor.WUI.MVVM.ViewModel
 
         public ObservableCollection<VpnClientActualDataResult> Clients { get; set; }
 
-        public RelayCommand OnRefreshData { get; set; }
+        public AsyncRelayCommand OnRefreshData { get; set; }
 
         private readonly DataContext _dataContext;
+        private readonly InfoBarService _infoBarService;
 
-        public ActualClientsViewModel(DataContext dataContext)
+        public ActualClientsViewModel(DataContext dataContext, InfoBarService infoBarService)
         {
             _dataContext = dataContext;
+            _infoBarService = infoBarService;
 
             Clients = new();
 
-            OnRefreshData = new RelayCommand(async () =>
-            {
-                await UpdateClientData();
-            });
+            OnRefreshData = new AsyncRelayCommand(UpdateClientData);
 
             OnRefreshData.Execute(null);
         }
 
         public async Task UpdateClientData()
         {
-            _dispatcherQueue.TryEnqueue(() => IsLoading = true);
+            IsLoading = true;
 
-            var tempoClients = new List<VpnClientActualDataResult>();
-            Clients.Clear();
-
-            var now = DateTime.Now.ToUniversalTime();
-            var start = now.AddMinutes(-10);
-
-            //using (DataContext db = new DataContext()) { }
-
-            var lastInserted = await _dataContext.VpnClient.MaxAsync(x => x.Inserted);
-            LastInserted = TimeZoneInfo.ConvertTimeFromUtc(lastInserted, TimeZoneInfo.Local);
-            OnPropertyChanged(nameof(LastInserted));
-
-            var clients = await _dataContext.VpnClient
-                 .Where(x => x.Inserted >= start)
-                 .ToListAsync();
-
-            if (clients.Count != 0)
+            try
             {
-                //var ordered1 = clients
-                //    .GroupBy(x => x.CommonName)
-                //    .Select(x => new
-                //    {
-                //        CommonName = x.Key,
-                //        Data = x.OrderByDescending(x => x.Inserted).ToList(),
-                //    });
+                var tempoClients = new List<VpnClientActualDataResult>();
 
-                var ordered2 = clients
+                var start = DateTime.UtcNow.AddMinutes(-10);
+
+                var lastByClient = await _dataContext.VpnClient
                     .GroupBy(x => x.CommonName)
                     .Select(x => new
                     {
                         CommonName = x.Key,
-                        Data = x
-                            .GroupBy(y => y.ConnectedSince)
-                            .Select(z => new
-                            {
-                                ConnectedSince = z.Key,
-                                Data = z
-                                    .OrderByDescending(x => x.Inserted)
-                                    .ToList()
-                            })
-                            .OrderByDescending(c => c.ConnectedSince)
-                            .ToList(),
-                    });
+                        LastConnected = x.Max(y => y.ConnectedSince),
+                        LastSeen = x.Max(y => y.Inserted),
+                    })
+                    .ToListAsync();
 
-                foreach (var itemOr in ordered2)
+                var recent = await _dataContext.VpnClient
+                    .AsNoTracking()
+                    .Where(x => x.Inserted >= start)
+                    .ToListAsync();
+
+                var recentByClient = recent.ToLookup(x => x.CommonName);
+
+                foreach (var last in lastByClient)
                 {
-                    var client = new VpnClientActualDataResult(itemOr.CommonName);
-
-                    if (itemOr.Data.Count > 0 && itemOr.Data.First().Data.Count > 1)
+                    var client = new VpnClientActualDataResult(last.CommonName)
                     {
-                        var item = itemOr.Data.First();
+                        LastConnected = ToLocal(last.LastConnected),
+                        LastSeen = ToLocal(last.LastSeen),
+                    };
 
-                        var bytesReceivedD = new List<(double, long)>();
-                        var bytesSentD = new List<(double, long)>();
-
-                        for (var i = 0; i < item.Data.Count; i++)
-                        {
-                            if (i + 1 < item.Data.Count)
-                            {
-                                var cur = item.Data[i];
-                                var prev = item.Data[i + 1];
-                                var a = Convert.ToInt64(cur.BytesReceived);
-                                var b = Convert.ToInt64(prev.BytesReceived);
-                                bytesReceivedD.Add(new(
-                                    (cur.Inserted - prev.Inserted).TotalSeconds,
-                                    a - b));
-                            }
-                        }
-
-                        for (var i = 0; i < item.Data.Count; i++)
-                        {
-                            if (i + 1 < item.Data.Count)
-                            {
-                                var cur = item.Data[i];
-                                var prev = item.Data[i + 1];
-                                var a = Convert.ToInt64(cur.BytesSent);
-                                var b = Convert.ToInt64(prev.BytesSent);
-                                bytesSentD.Add(new(
-                                    (cur.Inserted - prev.Inserted).TotalSeconds,
-                                    a - b));
-                            }
-                        }
-
-                        var lastReceived = bytesReceivedD.First().Item2 * 8 / bytesReceivedD.First().Item1;
-                        var lastReceivedMbit = Math.Round(lastReceived / 1048576, 2);
-
-                        var lastSent = bytesSentD.First().Item2 * 8 / bytesSentD.First().Item1;
-                        var lastSentMbit = Math.Round(lastSent / 1048576, 2);
-
-                        var connectedSince = item.Data.First().ConnectedSince;
-                        var connectedSinceAct = TimeZoneInfo.ConvertTimeFromUtc(connectedSince, TimeZoneInfo.Local);
-                        var diff = DateTime.Now - connectedSinceAct;
+                    var speed = ClientSpeedCalculator.Calculate(recentByClient[last.CommonName]);
+                    if (speed != null)
+                    {
+                        var diff = DateTime.Now - ToLocal(speed.ConnectedSince);
 
                         client.IsOnline = true;
-                        client.LastSend = $"{lastSentMbit} Mb/s";
-                        client.LasrReceived = $"{lastReceivedMbit} Mb/s";
+                        client.LastSend = $"{speed.SentMbit} Mb/s";
+                        client.LasrReceived = $"{speed.ReceivedMbit} Mb/s";
                         client.ConnectedTime = Math.Round(diff.TotalMinutes, 2);
-                        tempoClients.Add(client);
                     }
-                    else
-                    {
-                        tempoClients.Add(client);
-                    }
+
+                    tempoClients.Add(client);
                 }
-            }
 
-            var online = tempoClients.Select(x => x.Client).ToList();
-            var allClients = await _dataContext.VpnClient.Select(x => x.CommonName).Distinct().ToListAsync();
-            foreach (var item in allClients)
+                if (lastByClient.Count > 0)
+                    LastInserted = ToLocal(lastByClient.Max(x => x.LastSeen));
+
+                Clients = new(tempoClients
+                    .OrderByDescending(x => x.IsOnline)
+                    .ThenByDescending(x => x.LastSeen));
+                OnPropertyChanged(nameof(Clients));
+            }
+            catch (Exception ex)
             {
-                if (!tempoClients.Any(x => x.Client.Equals(item)))
-                    tempoClients.Add(new VpnClientActualDataResult(item));
+                _infoBarService.Show($"Не удалось загрузить данные: {ex.Message}");
             }
-
-
-            Clients = new(tempoClients.OrderByDescending(x => x.IsOnline));
-            OnPropertyChanged(nameof(Clients));
-
-            _dispatcherQueue.TryEnqueue(() => IsLoading = false);
+            finally
+            {
+                IsLoading = false;
+            }
         }
 
+        private static DateTime ToLocal(DateTime utc)
+        {
+            return TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local);
+        }
     }
 }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="VpnMonitor.WUI.MVVM.View.ActualClientsView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -63,7 +63,11 @@
                                 <TextBlock 
                                     FontWeight="Bold" 
                                     FontSize="16" 
-                                    Text="{Binding ViewConnectedTimeV2}"/>
+                                    Text="{Binding ViewStatus}"/>
+                                <TextBlock 
+                                    FontSize="14" 
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                                    Text="{Binding ViewLastConnected}"/>
                             </StackPanel>
 
                             <Grid>

@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using VpnMonitor.Data.Entities;
 
 
@@ -29,9 +29,8 @@ public class VpnClientParser
         {
             var props = clientTxt.Replace("CLIENT_LIST,", "").Split(',');
 
-            var connectedSinceUnc = DateTime.Parse(props[6]);
-            //var connectedSince = DateTime.SpecifyKind(connectedSinceUnc, DateTimeKind.Utc);
-            var connectedSince = connectedSinceUnc.ToUniversalTime();
+            // time_t is used instead of the text date: it does not depend on the server time zone or culture
+            var connectedSince = DateTimeOffset.FromUnixTimeSeconds(long.Parse(props[7])).UtcDateTime;
 
             result.Add(new VpnClient()
             {
@@ -57,27 +56,10 @@ public class VpnClientParser
         {
             var distinct = result
                 .GroupBy(x => x.CommonName)
-                .Select(x => x.OrderByDescending(x => x.BytesSent).First());
+                .Select(x => x.OrderByDescending(x => long.Parse(x.BytesSent)).First());
             return distinct.ToList();
         }
 
         return result;
-    }
-
-    public List<VpnClient> ParseClientsTest()
-    {
-        StringBuilder sb = new StringBuilder()
-           .AppendLine("TIME,2025 - 02 - 09 17:00:02,1739116802")
-           .AppendLine("HEADER, CLIENT_LIST, Common Name, Real Address, Virtual Address, Virtual IPv6 Address, Bytes Received, Bytes Sent, Connected Since, Connected Since (time_t), Username, Client ID, Peer ID, Data Channel Cipher")
-           .AppendLine("CLIENT_LIST,bav-all-client,109.229.110.141:58267,10.8.0.6,,3253025,62832311,2025-02-09 17:13:11,1739117591,UNDEF,45,1,AES-256-GCM")
-           .AppendLine("CLIENT_LIST, kirill-all-client,94.231.132.193:54305,10.8.0.5,,100,100,2025 - 02 - 09 16:58:04,1739116684,UNDEF,40,0, AES-256-GCM")
-           .AppendLine("CLIENT_LIST, kirill-all-client,94.231.132.193:54305,10.8.0.5,,200,200,2025 - 02 - 09 16:58:04,1739116684,UNDEF,40,0, AES-256-GCM")
-           .AppendLine("HEADER, ROUTING_TABLE, Virtual Address, Common Name, Real Address, Last Ref, Last Ref (time_t)")
-           .AppendLine("ROUTING_TABLE,10.8.0.5, kirill-all-client,94.231.132.193:54305,2025 - 02 - 09 17:00:01,1739116801")
-           .AppendLine("GLOBAL_STATS, Max bcast/mcast queue length,2")
-           .AppendLine("GLOBAL_STATS, dco_enabled,0")
-           .AppendLine("END");
-
-        return ParseClients(sb, DateTime.Now.ToUniversalTime());
     }
 }

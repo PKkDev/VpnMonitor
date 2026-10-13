@@ -1,4 +1,4 @@
-﻿using System.Reflection.PortableExecutable;
+using Microsoft.EntityFrameworkCore;
 using VpnMonitor.Data.Context;
 using VpnMonitor.Service.Services;
 
@@ -6,9 +6,13 @@ namespace VpnMonitor.Service.Worker
 {
     public class MonitorWorker : IDisposable
     {
-        private readonly string _connectionString;
+        private readonly IDbContextFactory<DataContext> _dbFactory;
 
         private readonly int _interval = 120;
+
+        private readonly int _retentionDays;
+        private readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(24);
+        private DateTime _lastCleanup = DateTime.MinValue;
 
         private CancellationTokenSource _tokenSource { get; set; }
         private CancellationToken _ct { get; set; }
@@ -18,9 +22,10 @@ namespace VpnMonitor.Service.Worker
         private TelnetClient client { get; set; }
         private VpnClientParser vpnClientParser { get; set; }
 
-        public MonitorWorker(string connectionString)
+        public MonitorWorker(IDbContextFactory<DataContext> dbFactory, int retentionDays)
         {
-            _connectionString = connectionString;
+            _dbFactory = dbFactory;
+            _retentionDays = retentionDays;
 
             //_interval = 3; 
             //ipStr = "45.79.112.203";
@@ -69,6 +74,7 @@ namespace VpnMonitor.Service.Worker
             while (true)
             {
                 CheckWork();
+                CleanupOldRecords();
                 SetInterval();
             }
         }
@@ -84,11 +90,38 @@ namespace VpnMonitor.Service.Worker
             CheckCancel();
             if (clients.Any())
             {
-                using (DataContext db = new DataContext(_connectionString))
+                using (DataContext db = _dbFactory.CreateDbContext())
                 {
                     db.VpnClient.AddRange(clients);
                     db.SaveChanges();
                 }
+            }
+        }
+
+        private void CleanupOldRecords()
+        {
+            if (_retentionDays <= 0 || DateTime.UtcNow - _lastCleanup < _cleanupInterval)
+                return;
+
+            _lastCleanup = DateTime.UtcNow;
+            var cutoff = DateTime.UtcNow.AddDays(-_retentionDays);
+
+            try
+            {
+                using (DataContext db = _dbFactory.CreateDbContext())
+                {
+                    // The latest record of every client is kept, so the client and its last connection stay known
+                    var deleted = db.VpnClient
+                        .Where(x => x.Inserted < cutoff
+                            && db.VpnClient.Any(y => y.CommonName == x.CommonName && y.Inserted > x.Inserted))
+                        .ExecuteDelete();
+
+                    WriteLog($"Cleanup: {deleted} records older than {_retentionDays} days deleted");
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteLog($"Cleanup failed: {ex.Message}");
             }
         }
 

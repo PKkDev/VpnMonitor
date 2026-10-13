@@ -1,9 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.EntityFrameworkCore;
 
 namespace VpnMonitor.Data.Entities;
 
 [Table("vpn-client", Schema = "public")]
+[Index(nameof(CommonName), nameof(Inserted))]
 public class VpnClient
 {
     [Key]

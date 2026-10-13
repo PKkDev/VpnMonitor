@@ -15,6 +15,10 @@ namespace VpnMonitor.WUI.MVVM.Model
 
         public double ConnectedTime { get; set; }
 
+        public DateTime? LastConnected { get; set; }
+
+        public DateTime? LastSeen { get; set; }
+
         public VpnClientActualDataResult(string client)
         {
             Client = client;
@@ -35,6 +39,10 @@ namespace VpnMonitor.WUI.MVVM.Model
         public string ViewTitle { get => $"{Client}"; }
 
         public string ViewConnectedTime { get => $"{ConnectedTime} мин"; }
+
+        public string ViewStatus { get => IsOnline ? ViewConnectedTimeV2 : $"Не в сети с {LastSeen:dd.MM.yyyy HH:mm}"; }
+
+        public string ViewLastConnected { get => $"Последнее подключение: {LastConnected:dd.MM.yyyy HH:mm}"; }
 
         public string ViewConnectedTimeV2
         {

@@ -17,11 +17,12 @@ namespace VpnMonitor.WUI.MVVM.View
             App.MainWindow.ExtendsContentIntoTitleBar = true;
             App.MainWindow.SetTitleBar(AppTitleBar);
 
+            // Before navigation: pages report loading errors to the InfoBar
+            infoBarService.Initialization(PageInfoBar);
+
             ViewModel.NavigationHelperService.Initialize(NavView, ContentFrame);
             NavView.SelectedItem = NavView.MenuItems[0];
             ViewModel.NavigationHelperService.Navigate("ActualClients");
-
-            infoBarService.Initialization(PageInfoBar);
         }
 
         private void NavView_DisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)

@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VpnMonitor.WUI", "VpnMonito
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VpnMonitor.Data", "VpnMonitor.Data\VpnMonitor.Data.csproj", "{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VpnMonitor.Tests", "VpnMonitor.Tests\VpnMonitor.Tests.csproj", "{1066A371-D7A2-46A0-B82C-11A4D53EE619}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,6 +31,10 @@ Global
 		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D527EA13-E84A-4C27-A7F1-8EF994B48DD2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1066A371-D7A2-46A0-B82C-11A4D53EE619}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1066A371-D7A2-46A0-B82C-11A4D53EE619}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1066A371-D7A2-46A0-B82C-11A4D53EE619}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1066A371-D7A2-46A0-B82C-11A4D53EE619}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
