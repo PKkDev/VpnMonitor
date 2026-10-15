@@ -11,6 +11,12 @@ public class DataContext : DbContext
 {
     public DbSet<VpnClient> VpnClient => Set<VpnClient>();
 
+    public DbSet<MonitorHeartbeat> MonitorHeartbeat => Set<MonitorHeartbeat>();
+
+    public DbSet<MonitorPoll> MonitorPoll => Set<MonitorPoll>();
+
+    public DbSet<ClientTrafficHourly> ClientTrafficHourly => Set<ClientTrafficHourly>();
+
     public DataContext(DbContextOptions<DataContext> options) : base(options) { }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

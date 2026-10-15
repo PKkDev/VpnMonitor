@@ -35,7 +35,8 @@
         <NavigationView 
             x:Name="NavView"
             Canvas.ZIndex="0"
-            IsBackButtonVisible="Collapsed" 
+            IsBackButtonVisible="Auto"
+            IsBackEnabled="False"
             PaneDisplayMode="Top"
             PaneTitle="Меню" 
             IsSettingsVisible="False"
@@ -48,6 +49,18 @@
                 <NavigationViewItem Tag="ActualClients" Content="Клиенты" ToolTipService.ToolTip="Активные клиенты">
                     <NavigationViewItem.Icon>
                         <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE716;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="TrafficStatistics" Content="Трафик" ToolTipService.ToolTip="Статистика трафика">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE9D2;"/>
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Tag="ServerOverview" Content="Сервер" ToolTipService.ToolTip="Обзор сервера">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE968;"/>
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
 

@@ -19,7 +19,9 @@ namespace VpnMonitor.WUI.Services
             {
                 if (_infoBar.IsOpen == true)
                 {
-                    _infoBar.Message += $"\r{message}";
+                    // Several pages may report the same problem, e.g. an unavailable database
+                    if (!_infoBar.Message.Contains(message))
+                        _infoBar.Message += $"\r{message}";
                 }
                 else
                 {

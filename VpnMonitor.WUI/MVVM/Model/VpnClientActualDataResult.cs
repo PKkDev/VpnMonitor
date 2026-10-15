@@ -9,9 +9,11 @@ namespace VpnMonitor.WUI.MVVM.Model
 
         public bool IsOnline { get; set; }
 
-        public string LastSend { get; set; }
+        /// <summary>Speed from the server to the client.</summary>
+        public string DownloadSpeed { get; set; }
 
-        public string LasrReceived { get; set; }
+        /// <summary>Speed from the client to the server.</summary>
+        public string UploadSpeed { get; set; }
 
         public double ConnectedTime { get; set; }
 
@@ -23,15 +25,15 @@ namespace VpnMonitor.WUI.MVVM.Model
         {
             Client = client;
             IsOnline = false;
-            LastSend = "0.0";
-            LasrReceived = "0.0";
+            DownloadSpeed = "—";
+            UploadSpeed = "—";
             ConnectedTime = 0;
         }
 
         public override string ToString()
         {
             var onlineStr = IsOnline ? "online" : "offline";
-            return $"{Client}({onlineStr}) - send: {LastSend} received: {LasrReceived}";
+            return $"{Client}({onlineStr}) - download: {DownloadSpeed} upload: {UploadSpeed}";
         }
 
         public string ViewTitleColor { get => IsOnline ? "Green" : "Gray"; }

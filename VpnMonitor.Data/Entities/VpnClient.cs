@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
 using System.ComponentModel.DataAnnotations;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,6 +6,7 @@ namespace VpnMonitor.Data.Entities;
 
 [Table("vpn-client", Schema = "public")]
 [Index(nameof(CommonName), nameof(Inserted))]
+[Index(nameof(Inserted))]
 public class VpnClient
 {
     [Key]
@@ -26,10 +27,10 @@ public class VpnClient
     public string VirtualIPv6Address { get; set; }
 
     [Column("bytes_received")]
-    public string BytesReceived { get; set; }
+    public long BytesReceived { get; set; }
 
     [Column("bytes_sent")]
-    public string BytesSent { get; set; }
+    public long BytesSent { get; set; }
 
     [Column("connected_since")]
     public DateTime ConnectedSince { get; set; }

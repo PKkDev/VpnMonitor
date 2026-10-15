@@ -23,6 +23,76 @@ namespace VpnMonitor.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("VpnMonitor.Data.Entities.ClientTrafficHourly", b =>
+                {
+                    b.Property<string>("CommonName")
+                        .HasColumnType("text")
+                        .HasColumnName("common_name");
+
+                    b.Property<DateTime>("Hour")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("hour");
+
+                    b.Property<long>("BytesReceived")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytes_received");
+
+                    b.Property<long>("BytesSent")
+                        .HasColumnType("bigint")
+                        .HasColumnName("bytes_sent");
+
+                    b.HasKey("CommonName", "Hour");
+
+                    b.ToTable("client-traffic-hourly", "public");
+                });
+
+            modelBuilder.Entity("VpnMonitor.Data.Entities.MonitorHeartbeat", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ActiveClients")
+                        .HasColumnType("integer")
+                        .HasColumnName("active_clients");
+
+                    b.Property<DateTime>("LastPoll")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_poll");
+
+                    b.Property<string>("ServerTitle")
+                        .HasColumnType("text")
+                        .HasColumnName("server_title");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("monitor-heartbeat", "public");
+                });
+
+            modelBuilder.Entity("VpnMonitor.Data.Entities.MonitorPoll", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("ActiveClients")
+                        .HasColumnType("integer")
+                        .HasColumnName("active_clients");
+
+                    b.Property<DateTime>("PolledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("polled_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolledAt");
+
+                    b.ToTable("monitor-poll", "public");
+                });
+
             modelBuilder.Entity("VpnMonitor.Data.Entities.VpnClient", b =>
                 {
                     b.Property<long>("Id")
@@ -32,14 +102,12 @@ namespace VpnMonitor.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
-                    b.Property<string>("BytesReceived")
-                        .IsRequired()
-                        .HasColumnType("text")
+                    b.Property<long>("BytesReceived")
+                        .HasColumnType("bigint")
                         .HasColumnName("bytes_received");
 
-                    b.Property<string>("BytesSent")
-                        .IsRequired()
-                        .HasColumnType("text")
+                    b.Property<long>("BytesSent")
+                        .HasColumnType("bigint")
                         .HasColumnName("bytes_sent");
 
                     b.Property<string>("ClientId")
@@ -96,6 +164,8 @@ namespace VpnMonitor.Data.Migrations
                         .HasColumnName("virtual_ip_v6_address");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Inserted");
 
                     b.HasIndex("CommonName", "Inserted");
 

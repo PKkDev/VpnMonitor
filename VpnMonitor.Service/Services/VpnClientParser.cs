@@ -38,8 +38,8 @@ public class VpnClientParser
                 RealAddress = props[1],
                 VirtualAddress = props[2],
                 VirtualIPv6Address = props[3],
-                BytesReceived = props[4],
-                BytesSent = props[5],
+                BytesReceived = long.Parse(props[4]),
+                BytesSent = long.Parse(props[5]),
                 ConnectedSince = connectedSince,
                 ConnectedSinceTimeT = props[7],
                 UserName = props[8],
@@ -56,10 +56,21 @@ public class VpnClientParser
         {
             var distinct = result
                 .GroupBy(x => x.CommonName)
-                .Select(x => x.OrderByDescending(x => long.Parse(x.BytesSent)).First());
+                .Select(x => x.OrderByDescending(x => x.BytesSent).First());
             return distinct.ToList();
         }
 
         return result;
+    }
+
+    /// <summary>Text of the TITLE line, e.g. "OpenVPN 2.6.12 x86_64-pc-linux-gnu [SSL (OpenSSL)] ...".</summary>
+    public string? ParseTitle(StringBuilder sb)
+    {
+        const string prefix = "TITLE,";
+
+        return sb.ToString()
+            .Split(Environment.NewLine)
+            .FirstOrDefault(x => x.StartsWith(prefix))?
+            .Substring(prefix.Length);
     }
 }

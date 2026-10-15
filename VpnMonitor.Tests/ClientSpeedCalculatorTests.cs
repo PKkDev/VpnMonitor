@@ -8,6 +8,9 @@ public class ClientSpeedCalculatorTests
     private static readonly DateTime Session = new(2025, 2, 9, 16, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime Start = new(2025, 2, 9, 17, 0, 0, DateTimeKind.Utc);
 
+    // 15 000 000 bytes in 120 s = 1 000 000 bit/s
+    private const long OneMbitFor120Seconds = 15_000_000;
+
     private static VpnClient Sample(DateTime connectedSince, int insertedAfterSeconds, long sent, long received)
     {
         return new VpnClient
@@ -15,8 +18,8 @@ public class ClientSpeedCalculatorTests
             CommonName = "client",
             ConnectedSince = connectedSince,
             Inserted = Start.AddSeconds(insertedAfterSeconds),
-            BytesSent = sent.ToString(),
-            BytesReceived = received.ToString(),
+            BytesSent = sent,
+            BytesReceived = received,
         };
     }
 
@@ -33,18 +36,17 @@ public class ClientSpeedCalculatorTests
     }
 
     [Fact]
-    public void Calculate_ConvertsByteDeltaToMbitPerSecond()
+    public void Calculate_ConvertsByteDeltaToBitsPerSecond()
     {
-        // 15 728 640 bytes in 120 s = 1 Mbit/s, 31 457 280 bytes in 120 s = 2 Mbit/s
         var speed = ClientSpeedCalculator.Calculate(new[]
         {
             Sample(Session, 0, 1000, 5000),
-            Sample(Session, 120, 1000 + 15_728_640, 5000 + 31_457_280),
+            Sample(Session, 120, 1000 + OneMbitFor120Seconds, 5000 + 2 * OneMbitFor120Seconds),
         });
 
         Assert.NotNull(speed);
-        Assert.Equal(1, speed.SentMbit);
-        Assert.Equal(2, speed.ReceivedMbit);
+        Assert.Equal(1_000_000, speed.SentBps);
+        Assert.Equal(2_000_000, speed.ReceivedBps);
         Assert.Equal(Session, speed.ConnectedSince);
     }
 
@@ -53,27 +55,14 @@ public class ClientSpeedCalculatorTests
     {
         var speed = ClientSpeedCalculator.Calculate(new[]
         {
-            Sample(Session, 240, 15_728_640, 0),
+            Sample(Session, 240, OneMbitFor120Seconds, 0),
             Sample(Session, 0, 0, 0),
             Sample(Session, 120, 0, 0),
         });
 
         Assert.NotNull(speed);
-        Assert.Equal(1, speed.SentMbit);
-        Assert.Equal(0, speed.ReceivedMbit);
-    }
-
-    [Fact]
-    public void Calculate_RoundsToTwoDecimals()
-    {
-        var speed = ClientSpeedCalculator.Calculate(new[]
-        {
-            Sample(Session, 0, 0, 0),
-            Sample(Session, 120, 5_000_000, 0),
-        });
-
-        Assert.NotNull(speed);
-        Assert.Equal(0.32, speed.SentMbit);
+        Assert.Equal(1_000_000, speed.SentBps);
+        Assert.Equal(0, speed.ReceivedBps);
     }
 
     [Fact]
@@ -87,11 +76,11 @@ public class ClientSpeedCalculatorTests
             Sample(Session, 0, 900_000_000, 900_000_000),
             Sample(Session, 120, 900_000_000, 900_000_000),
             Sample(reconnected, 240, 0, 0),
-            Sample(reconnected, 360, 15_728_640, 0),
+            Sample(reconnected, 360, OneMbitFor120Seconds, 0),
         });
 
         Assert.NotNull(speed);
-        Assert.Equal(1, speed.SentMbit);
+        Assert.Equal(1_000_000, speed.SentBps);
         Assert.Equal(reconnected, speed.ConnectedSince);
     }
 
@@ -118,5 +107,62 @@ public class ClientSpeedCalculatorTests
         });
 
         Assert.Null(speed);
+    }
+
+    [Fact]
+    public void Series_HasPointForEveryPairOfConsecutiveSamples()
+    {
+        var series = ClientSpeedCalculator.Series(new[]
+        {
+            Sample(Session, 240, 3 * OneMbitFor120Seconds, 0),
+            Sample(Session, 0, 0, 0),
+            Sample(Session, 120, OneMbitFor120Seconds, 0),
+        });
+
+        Assert.Equal(2, series.Count);
+        Assert.Equal(Start.AddSeconds(120), series[0].Time);
+        Assert.Equal(1_000_000, series[0].SentBps);
+        Assert.True(series[0].StartsSegment);
+        Assert.Equal(Start.AddSeconds(240), series[1].Time);
+        Assert.Equal(2_000_000, series[1].SentBps);
+        Assert.False(series[1].StartsSegment);
+    }
+
+    [Fact]
+    public void Series_AfterReconnect_StartsNewSegment()
+    {
+        var reconnected = Session.AddHours(1);
+
+        var series = ClientSpeedCalculator.Series(new[]
+        {
+            Sample(Session, 0, 0, 0),
+            Sample(Session, 120, OneMbitFor120Seconds, 0),
+            Sample(reconnected, 240, 0, 0),
+            Sample(reconnected, 360, OneMbitFor120Seconds, 0),
+        });
+
+        Assert.Equal(2, series.Count);
+        Assert.True(series[0].StartsSegment);
+        Assert.True(series[1].StartsSegment);
+        Assert.Equal(1_000_000, series[1].SentBps);
+    }
+
+    [Fact]
+    public void Series_AfterGapInData_StartsNewSegment()
+    {
+        var gap = (int)ClientSpeedCalculator.MaxGap.TotalSeconds + 120;
+
+        var series = ClientSpeedCalculator.Series(new[]
+        {
+            Sample(Session, 0, 0, 0),
+            Sample(Session, 120, 100, 0),
+            Sample(Session, 120 + gap, 200, 0),
+            Sample(Session, 240 + gap, 300, 0),
+        });
+
+        Assert.Equal(2, series.Count);
+        Assert.True(series[0].StartsSegment);
+        Assert.True(series[1].StartsSegment);
+        Assert.Equal(Start.AddSeconds(240 + gap), series[1].Time);
     }
 }

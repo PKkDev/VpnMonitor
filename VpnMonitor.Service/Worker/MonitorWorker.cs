@@ -1,159 +1,239 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using VpnMonitor.Data.Context;
+using VpnMonitor.Data.Entities;
+using VpnMonitor.Data.Statistics;
+using VpnMonitor.Service.Options;
 using VpnMonitor.Service.Services;
 
 namespace VpnMonitor.Service.Worker
 {
-    public class MonitorWorker : IDisposable
+    public class MonitorWorker : BackgroundService
     {
         private readonly IDbContextFactory<DataContext> _dbFactory;
+        private readonly MonitorOption _option;
+        private readonly ILogger<MonitorWorker> _logger;
 
-        private readonly int _interval = 120;
-
-        private readonly int _retentionDays;
+        private readonly VpnClientParser _vpnClientParser = new();
         private readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(24);
+        private readonly TimeSpan _cleanupRetryDelay = TimeSpan.FromHours(1);
+
+        // A large backlog (e.g. the first cleanup of a long history) is removed in portions over several polls,
+        // so one statement does not hit the command timeout and polls are not delayed for long
+        private const int CleanupBatchSize = 10_000;
+        private const int CleanupBatchesPerPoll = 20;
+
+        private TelnetClient? _client;
+        private bool _migrated;
         private DateTime _lastCleanup = DateTime.MinValue;
 
-        private CancellationTokenSource _tokenSource { get; set; }
-        private CancellationToken _ct { get; set; }
-
-        private string ipStr = "127.0.0.1";
-        private int port = 7505;
-        private TelnetClient client { get; set; }
-        private VpnClientParser vpnClientParser { get; set; }
-
-        public MonitorWorker(IDbContextFactory<DataContext> dbFactory, int retentionDays)
+        public MonitorWorker(
+            IDbContextFactory<DataContext> dbFactory,
+            IOptions<MonitorOption> option,
+            ILogger<MonitorWorker> logger)
         {
             _dbFactory = dbFactory;
-            _retentionDays = retentionDays;
-
-            //_interval = 3; 
-            //ipStr = "45.79.112.203";
-            //port = 4242;
-
-            _tokenSource = new CancellationTokenSource();
-            _ct = _tokenSource.Token;
-
-            client = new TelnetClient(ipStr, port);
-            vpnClientParser = new VpnClientParser();
+            _option = option.Value;
+            _logger = logger;
         }
 
-        public async Task Start()
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await client.Connect();
-            WriteLog("Connected");
+            _logger.LogInformation(
+                "Monitoring {Host}:{Port} every {Interval} s",
+                _option.Host, _option.Port, _option.IntervalSeconds);
 
             try
             {
-                var task = Task.Run(() => Cycle(), _ct);
-                await Task.WhenAll(task);
-            }
-            catch (OperationCanceledException)
-            {
-                WriteLog($"{nameof(OperationCanceledException)} thrown");
-            }
-            catch (Exception ex)
-            {
-                WriteLog(ex.Message.ToString());
-                throw;
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    var delay = TimeSpan.FromSeconds(_option.IntervalSeconds);
+
+                    try
+                    {
+                        await MigrateDatabase(stoppingToken);
+                        await Poll(stoppingToken);
+                        await CleanupOldRecords(stoppingToken);
+                    }
+                    catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+                    {
+                        // The connection is opened again on the next attempt
+                        Disconnect();
+                        delay = TimeSpan.FromSeconds(_option.RetryDelaySeconds);
+                        _logger.LogError("Poll failed, retry in {Delay} s: {Message}", delay.TotalSeconds, ex.Message);
+                    }
+
+                    await Task.Delay(delay, stoppingToken);
+                }
             }
             finally
             {
-                client.Dispose();
+                Disconnect();
             }
         }
 
-        public void Stop()
+        private async Task MigrateDatabase(CancellationToken ct)
         {
-            _tokenSource.Cancel();
-            WriteLog($"Task cancellation requested");
-        }
-
-        private void Cycle()
-        {
-            while (true)
-            {
-                CheckWork();
-                CleanupOldRecords();
-                SetInterval();
-            }
-        }
-
-        private void CheckWork()
-        {
-            CheckCancel();
-            var now = DateTime.Now.ToUniversalTime();
-            var response = client.SendCommand("status").GetAwaiter().GetResult();
-            var clients = vpnClientParser.ParseClients(response, now);
-            Console.WriteLine($"Active clients: {clients.Count} - {string.Join(',', clients.Select(x => x.CommonName))}");
-
-            CheckCancel();
-            if (clients.Any())
-            {
-                using (DataContext db = _dbFactory.CreateDbContext())
-                {
-                    db.VpnClient.AddRange(clients);
-                    db.SaveChanges();
-                }
-            }
-        }
-
-        private void CleanupOldRecords()
-        {
-            if (_retentionDays <= 0 || DateTime.UtcNow - _lastCleanup < _cleanupInterval)
+            if (_migrated)
                 return;
 
-            _lastCleanup = DateTime.UtcNow;
-            var cutoff = DateTime.UtcNow.AddDays(-_retentionDays);
+            await using (DataContext db = await _dbFactory.CreateDbContextAsync(ct))
+            {
+                await db.Database.MigrateAsync(ct);
+            }
+
+            _migrated = true;
+        }
+
+        private async Task Poll(CancellationToken ct)
+        {
+            if (_client == null)
+            {
+                var client = new TelnetClient(_option.Host, _option.Port);
+                try
+                {
+                    await client.Connect(ct);
+                }
+                catch
+                {
+                    client.Dispose();
+                    throw;
+                }
+
+                _client = client;
+                _logger.LogInformation("Connected to OpenVPN");
+            }
+
+            var now = DateTime.UtcNow;
+            var response = await _client.SendCommand("status", ct);
+            var clients = _vpnClientParser.ParseClients(response, now);
+            var title = _vpnClientParser.ParseTitle(response);
+            _logger.LogInformation(
+                "Active clients: {Count} - {Names}",
+                clients.Count, string.Join(',', clients.Select(x => x.CommonName)));
+
+            await using (DataContext db = await _dbFactory.CreateDbContextAsync(ct))
+            {
+                await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+                // Before the new snapshots are added: the previous ones are needed for the traffic delta
+                foreach (var client in clients)
+                    await AddHourlyTraffic(db, client, ct);
+
+                db.VpnClient.AddRange(clients);
+                db.MonitorPoll.Add(new MonitorPoll { PolledAt = now, ActiveClients = clients.Count });
+
+                // Written even without clients, so "nobody is connected" differs from "the service is down"
+                var heartbeat = await db.MonitorHeartbeat.FindAsync(new object[] { MonitorHeartbeat.SingleId }, ct);
+                if (heartbeat == null)
+                {
+                    heartbeat = new MonitorHeartbeat { Id = MonitorHeartbeat.SingleId };
+                    db.MonitorHeartbeat.Add(heartbeat);
+                }
+
+                heartbeat.LastPoll = now;
+                heartbeat.ActiveClients = clients.Count;
+                heartbeat.ServerTitle = title;
+
+                await db.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
+            }
+        }
+
+        private static async Task AddHourlyTraffic(DataContext db, VpnClient client, CancellationToken ct)
+        {
+            var previous = await db.VpnClient
+                .Where(x => x.CommonName == client.CommonName)
+                .OrderByDescending(x => x.Inserted)
+                .Select(x => new { x.ConnectedSince, x.BytesSent, x.BytesReceived })
+                .FirstOrDefaultAsync(ct);
+
+            // Counters of another session are not comparable: they started from zero on reconnect
+            if (previous != null && previous.ConnectedSince != client.ConnectedSince)
+                previous = null;
+
+            var sent = TrafficCalculator.Delta(client.BytesSent, previous?.BytesSent);
+            var received = TrafficCalculator.Delta(client.BytesReceived, previous?.BytesReceived);
+            if (sent == 0 && received == 0)
+                return;
+
+            var hour = TrafficCalculator.HourOf(client.Inserted);
+
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO public."client-traffic-hourly" (common_name, hour, bytes_received, bytes_sent)
+                VALUES ({client.CommonName}, {hour}, {received}, {sent})
+                ON CONFLICT (common_name, hour) DO UPDATE SET
+                    bytes_received = "client-traffic-hourly".bytes_received + EXCLUDED.bytes_received,
+                    bytes_sent = "client-traffic-hourly".bytes_sent + EXCLUDED.bytes_sent
+                """, ct);
+        }
+
+        private async Task CleanupOldRecords(CancellationToken ct)
+        {
+            if (_option.RetentionDays <= 0 || DateTime.UtcNow - _lastCleanup < _cleanupInterval)
+                return;
+
+            var cutoff = DateTime.UtcNow.AddDays(-_option.RetentionDays);
 
             try
             {
-                using (DataContext db = _dbFactory.CreateDbContext())
+                await using (DataContext db = await _dbFactory.CreateDbContextAsync(ct))
                 {
-                    // The latest record of every client is kept, so the client and its last connection stay known
-                    var deleted = db.VpnClient
-                        .Where(x => x.Inserted < cutoff
-                            && db.VpnClient.Any(y => y.CommonName == x.CommonName && y.Inserted > x.Inserted))
-                        .ExecuteDelete();
+                    var deleted = 0;
+                    var finished = false;
 
-                    WriteLog($"Cleanup: {deleted} records older than {_retentionDays} days deleted");
+                    for (var batch = 0; batch < CleanupBatchesPerPoll && !finished; batch++)
+                    {
+                        // The latest record of every client is kept, so the client and its last connection stay known
+                        var count = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                            DELETE FROM public."vpn-client"
+                            WHERE id IN (
+                                SELECT v.id
+                                FROM public."vpn-client" AS v
+                                WHERE v.inserted < {cutoff}
+                                    AND EXISTS (
+                                        SELECT 1
+                                        FROM public."vpn-client" AS newer
+                                        WHERE newer.common_name = v.common_name AND newer.inserted > v.inserted)
+                                LIMIT {CleanupBatchSize})
+                            """, ct);
+
+                        deleted += count;
+                        finished = count < CleanupBatchSize;
+                    }
+
+                    if (!finished)
+                    {
+                        // Due again on the next poll
+                        _logger.LogInformation("Cleanup: {Deleted} old snapshots deleted, continues on the next poll", deleted);
+                        return;
+                    }
+
+                    // Hourly traffic is kept forever: it is small and holds the long-term statistics
+                    deleted += await db.MonitorPoll
+                        .Where(x => x.PolledAt < cutoff)
+                        .ExecuteDeleteAsync(ct);
+
+                    _lastCleanup = DateTime.UtcNow;
+                    _logger.LogInformation(
+                        "Cleanup: {Deleted} records older than {Days} days deleted",
+                        deleted, _option.RetentionDays);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                WriteLog($"Cleanup failed: {ex.Message}");
+                // Not on every poll: a failing cleanup would load the database every 2 minutes
+                _lastCleanup = DateTime.UtcNow - _cleanupInterval + _cleanupRetryDelay;
+                _logger.LogError("Cleanup failed, retry in {Delay} h: {Message}", _cleanupRetryDelay.TotalHours, ex.Message);
             }
         }
 
-        private void SetInterval()
+        private void Disconnect()
         {
-            var temo = _interval;
-            while (temo > 0)
-            {
-                CheckCancel();
-                WriteLog($"Waiting {temo}");
-                temo--;
-                Thread.Sleep((int)TimeSpan.FromSeconds(1).TotalMilliseconds);
-            }
-        }
-
-        private void CheckCancel()
-        {
-            if (_ct.IsCancellationRequested)
-            {
-                WriteLog($"Task cancelled");
-                _ct.ThrowIfCancellationRequested();
-            }
-        }
-
-        private void WriteLog(string message)
-        {
-            Console.WriteLine(message);
-        }
-
-        public void Dispose()
-        {
-            Stop();
+            _client?.Dispose();
+            _client = null;
         }
     }
 }

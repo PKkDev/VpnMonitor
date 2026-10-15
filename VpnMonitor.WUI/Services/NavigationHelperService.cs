@@ -1,4 +1,4 @@
-﻿using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using System;
@@ -10,16 +10,20 @@ namespace VpnMonitor.WUI.Services
 {
     public class NavigationHelperService
     {
-        private NavigationView NavigationView { get; set; }
-        private Frame ContentFrame { get; set; }
+        public const string ActualClients = "ActualClients";
+        public const string ClientDetails = "ClientDetails";
+        public const string TrafficStatistics = "TrafficStatistics";
+        public const string ServerOverview = "ServerOverview";
+
+        private NavigationView NavigationView { get; set; } = null!;
+        private Frame ContentFrame { get; set; } = null!;
 
         private readonly Dictionary<string, Type> _pages = new()
         {
-            //{ "Board", typeof(BoardView) },
-            //{ "MergReq", typeof(MergReqView) },
-            //{ "FavoriteTask", typeof(FavoriteTaskView) },
-            //{ "Settings", typeof(SettingsView) },
-            { "ActualClients", typeof(ActualClientsView) }
+            { ActualClients, typeof(ActualClientsView) },
+            { ClientDetails, typeof(ClientDetailsView) },
+            { TrafficStatistics, typeof(TrafficStatisticsView) },
+            { ServerOverview, typeof(ServerOverviewView) },
         };
 
         public NavigationHelperService() { }
@@ -32,6 +36,7 @@ namespace VpnMonitor.WUI.Services
             NavigationView.BackRequested += OnBackRequested;
             NavigationView.ItemInvoked += OnItemInvoked;
             ContentFrame.NavigationFailed += OnNavigationFailed;
+            ContentFrame.Navigated += OnNavigated;
         }
 
         private void OnNavigationFailed(object sender, NavigationFailedEventArgs e)
@@ -39,7 +44,22 @@ namespace VpnMonitor.WUI.Services
 
         private void OnBackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
         {
-            // _contentFrame.GoBack();
+            if (ContentFrame.CanGoBack)
+                ContentFrame.GoBack();
+        }
+
+        private void OnNavigated(object sender, NavigationEventArgs e)
+        {
+            NavigationView.IsBackEnabled = ContentFrame.CanGoBack;
+
+            // After going back the menu highlights the page that is shown; the client card keeps the item it was opened from
+            var tag = _pages.FirstOrDefault(x => x.Value == e.SourcePageType).Key;
+            var item = NavigationView.MenuItems
+                .OfType<NavigationViewItem>()
+                .FirstOrDefault(x => Equals(x.Tag, tag));
+
+            if (item != null)
+                NavigationView.SelectedItem = item;
         }
 
         private void OnItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
@@ -51,7 +71,7 @@ namespace VpnMonitor.WUI.Services
             else if (args.InvokedItemContainer != null)
             {
                 var navItemTag = args.InvokedItemContainer.Tag.ToString();
-                Navigate(navItemTag);
+                Navigate(navItemTag!);
             }
         }
 
@@ -60,19 +80,17 @@ namespace VpnMonitor.WUI.Services
             ContentFrame.BackStack.Clear();
         }
 
-        public void Navigate(string navItemTag)
+        /// <param name="parameter">Passed to the page, e.g. the name of the client for its card.</param>
+        public void Navigate(string navItemTag, object? parameter = null)
         {
-            Type _page = null;
+            if (!_pages.TryGetValue(navItemTag, out var page))
+                return;
 
-            var item = _pages.FirstOrDefault(p => p.Key.Equals(navItemTag));
-            _page = item.Value;
+            // The same page is opened again only with another parameter
+            if (page == ContentFrame.CurrentSourcePageType && parameter == null)
+                return;
 
-            var preNavPageType = ContentFrame.CurrentSourcePageType;
-
-            if (!(_page is null) && !Type.Equals(preNavPageType, _page))
-            {
-                ContentFrame.Navigate(_page, null, new DrillInNavigationTransitionInfo());
-            }
+            ContentFrame.Navigate(page, parameter, new DrillInNavigationTransitionInfo());
         }
     }
 }

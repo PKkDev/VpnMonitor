@@ -1,4 +1,3 @@
-﻿using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
@@ -6,60 +5,84 @@ namespace VpnMonitor.Service.Services
 {
     public class TelnetClient : IDisposable
     {
+        private const string EndOfResponse = "END";
+
+        private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+
         private TcpClient? _tcpClient;
-        private NetworkStream? _networkStream;
         private StreamWriter? _writer;
         private StreamReader? _reader;
 
-        private IPEndPoint _endPoint;
+        private readonly string _host;
+        private readonly int _port;
 
         public TelnetClient(string host, int port)
         {
-            IPAddress ip = IPAddress.Parse(host);
-            _endPoint = new IPEndPoint(ip, port);
+            _host = host;
+            _port = port;
         }
 
-        public async Task Connect()
+        public async Task Connect(CancellationToken ct = default)
         {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(Timeout);
+
             _tcpClient = new TcpClient();
-            await _tcpClient.ConnectAsync(_endPoint);
+            try
+            {
+                await _tcpClient.ConnectAsync(_host, _port, timeout.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException($"No connection to {_host}:{_port} in {Timeout.TotalSeconds} s");
+            }
 
-            _networkStream = _tcpClient.GetStream();
-            _writer = new StreamWriter(_networkStream);
-            _reader = new StreamReader(_networkStream);
+            var stream = _tcpClient.GetStream();
+            _writer = new StreamWriter(stream);
+            _reader = new StreamReader(stream);
         }
 
-        public async Task<StringBuilder> SendCommand(string command)
+        /// <summary>
+        /// Sends a command whose response is terminated by the END line (such as "status") and returns all lines before it.
+        /// </summary>
+        public async Task<StringBuilder> SendCommand(string command, CancellationToken ct = default)
         {
-            if (_networkStream == null || _writer == null || _reader == null)
-                throw new ArgumentNullException(nameof(_networkStream));
+            if (_writer == null || _reader == null)
+                throw new InvalidOperationException("Not connected");
 
-            await _writer.WriteAsync($"{command}\r\n");
-            await _writer.FlushAsync();
-            Console.WriteLine($"Send: {command}");
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(Timeout);
 
             StringBuilder stringBuilder = new();
 
-            await Task.Delay(250);
-            var response = await _reader.ReadLineAsync();
-            Console.WriteLine($"Receive: {response}");
-            stringBuilder.AppendLine(response);
-            while (_networkStream.DataAvailable)
+            try
             {
-                await Task.Delay(250);
-                response = await _reader.ReadLineAsync();
-                stringBuilder.AppendLine(response);
-                Console.WriteLine($"Receive: {response}");
-            }
+                await _writer.WriteAsync($"{command}\r\n".AsMemory(), timeout.Token);
+                await _writer.FlushAsync(timeout.Token);
 
-            return stringBuilder;
+                while (true)
+                {
+                    var response = await _reader.ReadLineAsync(timeout.Token);
+                    if (response == null)
+                        throw new IOException("Connection closed by OpenVPN");
+
+                    if (response == EndOfResponse)
+                        return stringBuilder;
+
+                    stringBuilder.AppendLine(response);
+                }
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException($"No complete response to \"{command}\" in {Timeout.TotalSeconds} s");
+            }
         }
 
         public void Dispose()
         {
-            _tcpClient?.Close();
-            _writer?.Close();
-            _reader?.Close();
+            _writer?.Dispose();
+            _reader?.Dispose();
+            _tcpClient?.Dispose();
         }
     }
 

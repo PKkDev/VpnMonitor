@@ -35,8 +35,8 @@ public class VpnClientParserTests
         Assert.Equal("192.0.2.20:58267", client.RealAddress);
         Assert.Equal("10.8.0.6", client.VirtualAddress);
         Assert.Equal("fddd:1194:1194:1194::1001", client.VirtualIPv6Address);
-        Assert.Equal("3253025", client.BytesReceived);
-        Assert.Equal("62832311", client.BytesSent);
+        Assert.Equal(3253025, client.BytesReceived);
+        Assert.Equal(62832311, client.BytesSent);
         Assert.Equal("1739117591", client.ConnectedSinceTimeT);
         Assert.Equal("UNDEF", client.UserName);
         Assert.Equal("45", client.ClientId);
@@ -86,7 +86,19 @@ public class VpnClientParserTests
 
         var client = Assert.Single(new VpnClientParser().ParseClients(sb, Now));
 
-        Assert.Equal("100000", client.BytesSent);
+        Assert.Equal(100000, client.BytesSent);
         Assert.Equal("10.8.0.7", client.VirtualAddress);
+    }
+
+    [Fact]
+    public void ParseTitle_ReturnsTitleText()
+    {
+        Assert.Equal("OpenVPN 2.6.12 x86_64-pc-linux-gnu", new VpnClientParser().ParseTitle(Status()));
+    }
+
+    [Fact]
+    public void ParseTitle_WithoutTitle_ReturnsNull()
+    {
+        Assert.Null(new VpnClientParser().ParseTitle(new System.Text.StringBuilder().AppendLine("END")));
     }
 }

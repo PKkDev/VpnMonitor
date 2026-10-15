@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="VpnMonitor.WUI.MVVM.View.ServerOverviewView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:VpnMonitor.WUI.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Page.Resources>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}"/>
+            <Setter Property="BorderBrush" Value="{ThemeResource CardStrokeColorDefaultBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+        <Style x:Key="Caption" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
+        </Style>
+    </Page.Resources>
+
+    <ScrollViewer>
+        <StackPanel Padding="12,8,12,16" Spacing="12">
+
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" FontSize="22" FontWeight="Bold" Text="Сервер"/>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                    <ProgressRing Width="20" Height="20" IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"/>
+                    <ComboBox ItemsSource="{x:Bind ViewModel.Periods}" SelectedItem="{Binding SelectedPeriod, Mode=TwoWay}"/>
+                </StackPanel>
+            </Grid>
+
+            <Border Style="{StaticResource Card}">
+                <Grid ColumnSpacing="12" RowSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="auto"/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="auto"/>
+                        <RowDefinition Height="auto"/>
+                        <RowDefinition Height="auto"/>
+                        <RowDefinition Height="auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Caption}" Text="Сервис"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" FontWeight="SemiBold" Foreground="{Binding ServiceStateColor}" Text="{x:Bind ViewModel.ServiceState, Mode=OneWay}"/>
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Style="{StaticResource Caption}" Text="Последний опрос"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind ViewModel.LastPoll, Mode=OneWay}"/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource Caption}" Text="Клиентов онлайн"/>
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind ViewModel.OnlineNow, Mode=OneWay}"/>
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource Caption}" Text="OpenVPN"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{x:Bind ViewModel.ServerTitle, Mode=OneWay}"/>
+                </Grid>
+            </Border>
+
+            <TextBlock
+                TextWrapping="Wrap"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind ViewModel.Hint, Mode=OneWay}"/>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel Spacing="8">
+                    <TextBlock FontWeight="SemiBold" Text="Клиентов онлайн"/>
+                    <controls:LineChart
+                        ValueKind="Count"
+                        Series="{x:Bind ViewModel.OnlineSeries, Mode=OneWay}"
+                        RangeStart="{x:Bind ViewModel.RangeStart, Mode=OneWay}"
+                        RangeEnd="{x:Bind ViewModel.RangeEnd, Mode=OneWay}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <TextBlock FontWeight="SemiBold" Text="{x:Bind ViewModel.SpeedTitle, Mode=OneWay}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Rectangle Width="10" Height="10" Fill="#2D7DD2" VerticalAlignment="Center"/>
+                                <TextBlock FontSize="12" Text="Скачивание"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                <Rectangle Width="10" Height="10" Fill="#F28C28" VerticalAlignment="Center"/>
+                                <TextBlock FontSize="12" Text="Отдача"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+                    <controls:LineChart
+                        ValueKind="Speed"
+                        Series="{x:Bind ViewModel.SpeedSeries, Mode=OneWay}"
+                        RangeStart="{x:Bind ViewModel.RangeStart, Mode=OneWay}"
+                        RangeEnd="{x:Bind ViewModel.RangeEnd, Mode=OneWay}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}">
+                <StackPanel Spacing="8">
+                    <Grid>
+                        <TextBlock FontWeight="SemiBold" Text="Трафик"/>
+                        <TextBlock HorizontalAlignment="Right" Text="{x:Bind ViewModel.TrafficTotal, Mode=OneWay}"/>
+                    </Grid>
+                    <controls:BarChart ValueKind="Bytes" Bars="{x:Bind ViewModel.TrafficBars, Mode=OneWay}"/>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+
+</Page>

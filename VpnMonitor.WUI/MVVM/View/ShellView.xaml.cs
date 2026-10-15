@@ -22,7 +22,7 @@ namespace VpnMonitor.WUI.MVVM.View
 
             ViewModel.NavigationHelperService.Initialize(NavView, ContentFrame);
             NavView.SelectedItem = NavView.MenuItems[0];
-            ViewModel.NavigationHelperService.Navigate("ActualClients");
+            ViewModel.NavigationHelperService.Navigate(NavigationHelperService.ActualClients);
         }
 
         private void NavView_DisplayModeChanged(NavigationView sender, NavigationViewDisplayModeChangedEventArgs args)
