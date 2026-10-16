@@ -56,6 +56,14 @@ namespace VpnMonitor.Data.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("active_clients");
 
+                    b.Property<string>("LastError")
+                        .HasColumnType("text")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTime?>("LastErrorAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_error_at");
+
                     b.Property<DateTime>("LastPoll")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_poll");

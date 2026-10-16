@@ -14,5 +14,5 @@ public class MonitorOption
     public int RetryDelaySeconds { get; set; } = 10;
 
     /// <summary>How long records are kept. 0 disables the cleanup.</summary>
-    public int RetentionDays { get; set; } = 30;
+    public int RetentionDays { get; set; } = 60;
 }

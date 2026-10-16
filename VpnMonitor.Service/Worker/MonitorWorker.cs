@@ -63,6 +63,7 @@ namespace VpnMonitor.Service.Worker
                         Disconnect();
                         delay = TimeSpan.FromSeconds(_option.RetryDelaySeconds);
                         _logger.LogError("Poll failed, retry in {Delay} s: {Message}", delay.TotalSeconds, ex.Message);
+                        await RecordError("Опрос", ex, stoppingToken);
                     }
 
                     await Task.Delay(delay, stoppingToken);
@@ -227,6 +228,38 @@ namespace VpnMonitor.Service.Worker
                 // Not on every poll: a failing cleanup would load the database every 2 minutes
                 _lastCleanup = DateTime.UtcNow - _cleanupInterval + _cleanupRetryDelay;
                 _logger.LogError("Cleanup failed, retry in {Delay} h: {Message}", _cleanupRetryDelay.TotalHours, ex.Message);
+                await RecordError("Очистка", ex, ct);
+            }
+        }
+
+        /// <summary>
+        /// Saves the failure to the heartbeat, so the app shows why the service does not work without access to its log.
+        /// Fails silently when the database itself is the problem: the log still has the error.
+        /// </summary>
+        private async Task RecordError(string operation, Exception ex, CancellationToken ct)
+        {
+            const int maxLength = 1000;
+
+            var message = ex.InnerException == null ? ex.Message : $"{ex.Message} ({ex.InnerException.Message})";
+            message = $"{operation}: {message}";
+            if (message.Length > maxLength)
+                message = message[..maxLength];
+
+            try
+            {
+                await using (DataContext db = await _dbFactory.CreateDbContextAsync(ct))
+                {
+                    var now = DateTime.UtcNow;
+                    await db.MonitorHeartbeat
+                        .Where(x => x.Id == MonitorHeartbeat.SingleId)
+                        .ExecuteUpdateAsync(x => x
+                            .SetProperty(y => y.LastError, message)
+                            .SetProperty(y => y.LastErrorAt, now), ct);
+                }
+            }
+            catch (Exception recordEx) when (!ct.IsCancellationRequested)
+            {
+                _logger.LogDebug("Error not recorded: {Message}", recordEx.Message);
             }
         }
 

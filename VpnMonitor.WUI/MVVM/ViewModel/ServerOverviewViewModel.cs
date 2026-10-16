@@ -41,6 +41,18 @@ namespace VpnMonitor.WUI.MVVM.ViewModel
         private string _lastPoll = string.Empty;
         public string LastPoll { get => _lastPoll; private set => SetProperty(ref _lastPoll, value); }
 
+        /// <summary>An older error is not shown once the service works again.</summary>
+        private static readonly TimeSpan ShowErrorFor = TimeSpan.FromHours(24);
+
+        private string _lastError = string.Empty;
+        public string LastError { get => _lastError; private set => SetProperty(ref _lastError, value); }
+
+        private string _lastErrorColor = "Gray";
+        public string LastErrorColor { get => _lastErrorColor; private set => SetProperty(ref _lastErrorColor, value); }
+
+        private bool _hasLastError;
+        public bool HasLastError { get => _hasLastError; private set => SetProperty(ref _hasLastError, value); }
+
         private string _serverTitle = string.Empty;
         public string ServerTitle { get => _serverTitle; private set => SetProperty(ref _serverTitle, value); }
 
@@ -108,6 +120,7 @@ namespace VpnMonitor.WUI.MVVM.ViewModel
                 ServiceStateColor = "Gray";
                 LastPoll = "—";
                 ServerTitle = "—";
+                HasLastError = false;
             }
             else
             {
@@ -116,6 +129,13 @@ namespace VpnMonitor.WUI.MVVM.ViewModel
                 ServiceStateColor = isStale ? "OrangeRed" : "Green";
                 LastPoll = $"{Formats.ToLocal(heartbeat.LastPoll):dd.MM.yyyy HH:mm:ss}";
                 ServerTitle = heartbeat.ServerTitle ?? "появится после обновления сервиса";
+
+                // After the last successful poll the error is current: highlighted
+                var errorAt = heartbeat.LastErrorAt;
+                var isCurrent = errorAt > heartbeat.LastPoll;
+                HasLastError = errorAt != null && (isCurrent || nowUtc - errorAt < ShowErrorFor);
+                LastError = errorAt != null ? $"{Formats.ToLocal(errorAt.Value):dd.MM.yyyy HH:mm:ss} — {heartbeat.LastError}" : string.Empty;
+                LastErrorColor = isCurrent ? "OrangeRed" : "Gray";
             }
 
             var polls = await Optional(() => db.MonitorPoll

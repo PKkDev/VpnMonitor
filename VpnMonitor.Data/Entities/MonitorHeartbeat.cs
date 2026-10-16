@@ -25,4 +25,11 @@ public class MonitorHeartbeat
     /// <summary>TITLE line of the OpenVPN status, contains the server version.</summary>
     [Column("server_title")]
     public string? ServerTitle { get; set; }
+
+    /// <summary>Last failure of a poll or of the cleanup, kept after recovery: compare with <see cref="LastPoll"/>.</summary>
+    [Column("last_error")]
+    public string? LastError { get; set; }
+
+    [Column("last_error_at")]
+    public DateTime? LastErrorAt { get; set; }
 }

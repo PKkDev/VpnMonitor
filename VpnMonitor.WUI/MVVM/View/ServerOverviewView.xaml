@@ -49,6 +49,7 @@
                         <RowDefinition Height="auto"/>
                         <RowDefinition Height="auto"/>
                         <RowDefinition Height="auto"/>
+                        <RowDefinition Height="auto"/>
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource Caption}" Text="Сервис"/>
@@ -62,6 +63,15 @@
 
                     <TextBlock Grid.Row="3" Grid.Column="0" Style="{StaticResource Caption}" Text="OpenVPN"/>
                     <TextBlock Grid.Row="3" Grid.Column="1" TextWrapping="Wrap" IsTextSelectionEnabled="True" Text="{x:Bind ViewModel.ServerTitle, Mode=OneWay}"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Style="{StaticResource Caption}" Text="Последняя ошибка" Visibility="{x:Bind ViewModel.HasLastError, Mode=OneWay}"/>
+                    <TextBlock
+                        Grid.Row="4" Grid.Column="1"
+                        TextWrapping="Wrap"
+                        IsTextSelectionEnabled="True"
+                        Foreground="{Binding LastErrorColor}"
+                        Visibility="{x:Bind ViewModel.HasLastError, Mode=OneWay}"
+                        Text="{x:Bind ViewModel.LastError, Mode=OneWay}"/>
                 </Grid>
             </Border>
 
